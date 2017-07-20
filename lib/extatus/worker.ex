@@ -18,8 +18,9 @@ defmodule Extatus.Worker do
 
   @callback run(task:: term) ::
   :ok | {:ok, data :: term} |
-  {:error, reason :: term} |
-  {:pause, millis :: integer}
+  :retry |
+  {:retry, millis :: integer} |
+  {:error, reason :: term}
 
   defmacro __using__(opts) do
     quote location: :keep, bind_quoted: [opts: opts] do
@@ -37,18 +38,16 @@ defmodule Extatus.Worker do
           total: Enum.count(tasks)
         }
 
-        send self(), :started
-
-        schedule(task)
+        schedule(:execute, task)
 
         {:ok, state}
       end
 
       def handle_call(:status, _from, state = %{todo: _, failed: _, executing: _, done: done, total: total}) do
-        {:reply, {Enum.count(done), total}, state}
+        {:reply, state, state}
       end
 
-      def handle_info({:execute, task}, state) do
+      def handle_cast({:execute, task}, state) do
         todo = List.delete(state.todo, task)
         executing = [task | state.executing]
 
@@ -56,60 +55,69 @@ defmodule Extatus.Worker do
 
         {:noreply, Map.merge(state, %{todo: todo, executing: executing})}
       end
-      
+
+      def handle_info({:execute, task}, state) do
+        GenServer.cast(self(), {:execute, task})
+        {:noreply, state}
+      end
+
+      def handle_info({:retry, task}, state) do
+        GenServer.cast(self(), {:retry, task})
+        {:noreply, state}
+      end
+
       def handle_info(msg, state) do
         super(msg, state)
       end
 
-      def handle_cast({:complete, task}, state = %{todo: [next | todo], failed: _, executing: _, done: _, total: _}) do
-        send self(), {:complete, task}
-        schedule(next)
+      def handle_cast({:complete, task}, state) do
+        case state.todo do
+          [next| _] -> schedule(:execute, next)
+          [] -> nil
+        end
 
         {:noreply, Map.merge(state, %{executing: state.executing |> List.delete(task), done: [task | state.done]})}
       end
 
-      def handle_cast({:complete, task}, state = %{todo: [], failed: _, executing: _, done: _, total: _}) do
-        send self(), {:complete, task}
-        #exit(:normal)
-        {:noreply, Map.merge(state, %{executing: state.executing |> List.delete(task), done: [task | state.done]})}
+      def handle_cast({:error, task, reason}, state) do
+        new_state =
+          case state.todo do
+            [] -> 
+              state
+            [next| _] ->
+              schedule(:execute, next)
+              Map.merge(state, %{executing: state.executing |> List.delete(task), failed: [{task, reason} | state.failed]})
+          end
+        {:noreply, new_state}
       end
 
-      def handle_cast({:error, task, reason}, state = %{todo: [next | todo], failed: _, executing: _, done: _, total: _}) do
-        send self(), {:failed, task}
-        schedule(next)
-        {:noreply, Map.merge(state, %{executing: state.executing |> List.delete(task), failed: [{task, reason} | state.failed]})}
-      end
-
-      def handle_cast({:error, task, reason}, state = %{todo: [], failed: _, executing: _, done: _, total: _}) do
-        send self(), {:failed, task}
-        exit(:normal)
-        {:noreply, Map.merge(state, %{executing: state.executing |> List.delete(task), failed: [{task, reason} | state.failed]})}
-      end
-
-      def handle_cast({:pause, task, millis, reason}, state) do
-        send self(), {:paused, task, millis, reason}
-        schedule(task, millis)
+      def handle_cast({:retry, task}, state) do
+        Task.start(__MODULE__, :process, [task, self()])
         {:noreply, state}
       end
 
-      def terminate(reason, state) do
-        send self(), {:after, state.done, state.failed}
-        super(reason, state)
+      def handle_cast({:retry, task, millis}, state) do
+        schedule(:retry, task, millis)
+        {:noreply, state}
       end
 
       def process(task, pid) do
-        send self(), {:stated, task}
         case run(task) do
-          :ok -> GenServer.cast(pid, {:complete, task})
-          {:ok, info} -> GenServer.cast(pid, {:complete, task})
-          {:pause, millis, reason} -> GenServer.cast(pid, {:pause, task, millis, reason})
-          {:error, reason} -> GenServer.cast(pid, {:error, task, reason})
-          _ -> raise("run(task) must return :ok | {:ok, data} | {:error, reason}")
+          :ok -> 
+            GenServer.cast(pid, {:complete, task})
+          {:ok, info} ->
+            GenServer.cast(pid, {:complete, task})
+          :retry ->
+            GenServer.cast(pid, {:retry, task})
+          {:retry, millis} ->
+            GenServer.cast(pid, {:retry, task, millis})
+          {:error, reason} ->
+            GenServer.cast(pid, {:error, task, reason})
         end
       end
 
-      defp schedule(task, millis \\ 0) do
-        Process.send_after self(), {:execute, task}, millis
+      defp schedule(method, task, millis \\ 0) do
+        Process.send_after self(), {method, task}, millis
       end
     end
   end

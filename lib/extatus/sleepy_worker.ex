@@ -5,10 +5,10 @@ defmodule Extatus.SleepyWorker do
 
   def run(task) do
     Logger.debug("Running #{inspect task}")
-    :timer.sleep(10000)
+    :timer.sleep(1000)
 
     if rem(task, 3) == 0 do
-      Enum.random([{:pause, 10000, "multiple of 3!"}, :ok])
+      Enum.random([:retry, {:retry, 5000}, :ok])
     else
       if rem(task, 2) ==  0 do
         {:error, "number is even"}
