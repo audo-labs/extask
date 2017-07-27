@@ -1,5 +1,5 @@
-defmodule Extatus.SleepyWorker do
-  use Extatus.Worker
+defmodule Extask.SleepyWorker do
+  use Extask.Worker
 
   require Logger
 

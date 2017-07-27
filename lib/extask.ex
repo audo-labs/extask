@@ -1,6 +1,6 @@
-defmodule Extatus do
+defmodule Extask do
   @moduledoc """
-  Documentation for Extatus.
+  Documentation for Extask.
   """
 
   @doc """
@@ -8,7 +8,7 @@ defmodule Extatus do
 
   ## Examples
 
-      iex> Extatus.hello
+      iex> Extask.hello
       :world
 
   """

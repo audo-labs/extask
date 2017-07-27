@@ -1,4 +1,4 @@
-defmodule Extatus.Worker do
+defmodule Extask.Worker do
   use GenServer
 
   #
