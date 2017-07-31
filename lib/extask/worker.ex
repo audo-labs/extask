@@ -1,13 +1,6 @@
 defmodule Extask.Worker do
   use GenServer
 
-  #
-  # Client API
-  #
-  def start_link(module, tasks, opts \\ []) do
-    GenServer.start_link(module, tasks, opts) 
-  end
-
   def status(pid) do
     GenServer.call(pid, :status)
   end
@@ -29,6 +22,10 @@ defmodule Extask.Worker do
       #
       # Server API
       #
+      def start_link(tasks) do
+        GenServer.start_link(__MODULE__, tasks) 
+      end
+
       def init(tasks = [task | _]) do
         state = %{
           todo: tasks,

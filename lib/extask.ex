@@ -1,18 +1,17 @@
 defmodule Extask do
-  @moduledoc """
-  Documentation for Extask.
-  """
+  use Supervisor
 
-  @doc """
-  Hello world.
+  @name __MODULE__
 
-  ## Examples
+  def start_link() do
+    Supervisor.start_link(@name, [], name: @name)
+  end
 
-      iex> Extask.hello
-      :world
+  def init(_) do
+    supervise([], strategy: :one_for_one)
+  end
 
-  """
-  def hello do
-    :world
+  def start_child(child, itens) do
+    Supervisor.start_child(@name, child.child_spec(itens)) 
   end
 end
