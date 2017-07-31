@@ -8,10 +8,10 @@ defmodule Extask do
   end
 
   def init(_) do
-    supervise([], strategy: :one_for_one)
+    Supervisor.init([], strategy: :one_for_one)
   end
 
-  def start_child(child, itens) do
-    Supervisor.start_child(@name, child.child_spec(itens)) 
+  def start_child(child, items) do
+    Supervisor.start_child(@name, child.child_spec(items)) 
   end
 end
