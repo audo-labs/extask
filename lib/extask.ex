@@ -1,24 +1,27 @@
 defmodule Extask do
-  use Supervisor
+  use Application
 
-  @name __MODULE__
-
-  def start_link() do
-    Supervisor.start_link(@name, [], name: @name)
-  end
-
-  def init(_) do
-    Supervisor.init([], strategy: :one_for_one)
+  def start(_type, _args) do
+    Extask.Supervisor.start_link()
   end
 
   def start_child(child, items) do
-    spec = 
-      Supervisor.child_spec(
-        child,
-        start: {child, :start_link, [items]},
-        id: "#{child}/#{:erlang.phash2(MapSet.new(items))}"
-      )
-
-    Supervisor.start_child(@name, spec) 
+    Extask.Supervisor.start_child(child, items)
   end
+
+  def child_status(pid_or_id) when is_pid(pid_or_id) do
+    Extask.Worker.status(pid_or_id)
+  end
+
+  def child_status(pid_or_id) when is_binary(pid_or_id) do
+    case Extask.Supervisor.find_child(pid_or_id) do
+      nil -> nil
+      pid -> Extask.Worker.status(pid)
+    end
+  end
+
+  def child_id(child, items) do
+    "#{child}/#{:erlang.phash2(MapSet.new(items))}"
+  end
+
 end

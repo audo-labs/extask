@@ -22,8 +22,8 @@ defmodule Extask.Worker do
       #
       # Server API
       #
-      def start_link(tasks) do
-        GenServer.start_link(__MODULE__, tasks) 
+      def start_link(tasks, opts \\ []) do
+        GenServer.start_link(__MODULE__, tasks, opts) 
       end
 
       def init(tasks = [task | _]) do
@@ -48,6 +48,7 @@ defmodule Extask.Worker do
         todo = List.delete(state.todo, task)
         executing = [task | state.executing]
 
+        # TODO: check task fail
         Task.start(__MODULE__, :process, [task, self()])
 
         {:noreply, Map.merge(state, %{todo: todo, executing: executing})}
