@@ -78,15 +78,10 @@ defmodule Extask.Worker do
       end
 
       def handle_cast({:error, task, reason}, state) do
-        new_state =
-          case state.todo do
-            [] -> 
-              state
-            [next| _] ->
-              schedule(:execute, next)
-              Map.merge(state, %{executing: state.executing |> List.delete(task), failed: [{task, reason} | state.failed]})
-          end
-        {:noreply, new_state}
+        if length(state.todo) > 0 do
+          schedule(:execute, hd(state.todo))
+        end
+        {:noreply, Map.merge(state, %{executing: state.executing |> List.delete(task), failed: [{task, reason} | state.failed]})}
       end
 
       def handle_cast({:retry, task}, state) do
