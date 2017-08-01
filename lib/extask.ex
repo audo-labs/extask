@@ -12,6 +12,13 @@ defmodule Extask do
   end
 
   def start_child(child, items) do
-    Supervisor.start_child(@name, child.child_spec(items)) 
+    spec = 
+      Supervisor.child_spec(
+        child,
+        start: {child, :start_link, [items]},
+        id: "#{child}/#{:erlang.phash2(MapSet.new(items))}"
+      )
+
+    Supervisor.start_child(@name, spec) 
   end
 end
