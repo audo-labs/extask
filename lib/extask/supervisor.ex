@@ -23,7 +23,8 @@ defmodule Extask.Supervisor do
       Supervisor.child_spec(
         child,
         start: {child, :start_link, [items]},
-        id: Extask.child_id(child, items)
+        id: Extask.child_id(child, items),
+        restart: :transient
       )
 
     Supervisor.start_child(@name, spec) 
