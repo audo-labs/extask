@@ -5,10 +5,25 @@ defmodule ExtaskTest do
   defmodule TestWorker do
     use Extask.Worker
 
-    def run(_task) do
+    def run(_task, _meta) do
       {:error, "fail"}
     end
 
+    def handle_status(:job_complete, state) do
+      send Keyword.get(state.meta, :pid), :job_complete
+      {:noreply, state}
+    end
+
+    def handle_status(_a, state) do
+      {:noreply, state}
+    end
+
+  end
+
+  test "receive :job_complete" do
+    Extask.start_child(TestWorker, [1], [pid: self()])
+
+    assert_receive :job_complete
   end
 
   test "error on the last item" do

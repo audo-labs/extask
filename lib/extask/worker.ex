@@ -9,36 +9,45 @@ defmodule Extask.Worker do
     GenServer.stop(pid)
   end
 
-  @callback run(task:: term) ::
+  @callback run(task:: term, meta :: term) ::
   :ok | {:ok, data :: term} |
   :retry |
   {:retry, millis :: integer} |
   {:error, reason :: term}
 
+  @callback handle_status(status :: term, state :: term) :: {:noreply, state :: term}
+
   defmacro __using__(opts) do
     quote location: :keep, bind_quoted: [opts: opts] do
+      @behaviour Extask.Worker
       use GenServer
 
       #
       # Server API
       #
-      def start_link(tasks, opts \\ []) do
-        GenServer.start_link(__MODULE__, tasks, opts) 
+      def start_link(tasks, meta \\ []) do
+        GenServer.start_link(__MODULE__, [tasks: tasks, meta: meta]) 
       end
 
-      def init(tasks = [task | _]) do
+      def init([tasks: tasks = [task | _], meta: meta]) do
         state = %{
           todo: tasks,
           failed: [],
           executing: [],
           done: [],
-          total: Enum.count(tasks)
+          total: Enum.count(tasks),
+          meta: meta
         }
 
         schedule(:execute, task)
 
         {:ok, state}
       end
+
+      def handle_status(m, state) do
+        {:noreply, state}
+      end
+
 
       def handle_call(:status, _from, state = %{todo: _, failed: _, executing: _, done: done, total: total}) do
         {:reply, state, state}
@@ -49,7 +58,7 @@ defmodule Extask.Worker do
         executing = [task | state.executing]
 
         # TODO: check task fail
-        Task.start(__MODULE__, :process, [task, self()])
+        Task.start(__MODULE__, :process, [task, state.meta, self()])
 
         {:noreply, Map.merge(state, %{todo: todo, executing: executing})}
       end
@@ -63,6 +72,18 @@ defmodule Extask.Worker do
         GenServer.cast(self(), {:retry, task})
         {:noreply, state}
       end
+      
+      def handle_info({:status, :job_complete}, state) do
+        handle_status(:job_complete, state)
+      end
+
+      def handle_info({:status, msg}, state) do
+        if length(state.todo ++ state.executing) == 0 do
+          send self(), {:status, :job_complete}
+        end
+
+        handle_status(msg, state)
+      end
 
       def handle_info(msg, state) do
         super(msg, state)
@@ -74,6 +95,8 @@ defmodule Extask.Worker do
           [] -> nil
         end
 
+        send self(), {:status, {:step_complete, task}}
+
         {:noreply, Map.merge(state, %{executing: state.executing |> List.delete(task), done: [task | state.done]})}
       end
 
@@ -81,11 +104,15 @@ defmodule Extask.Worker do
         if length(state.todo) > 0 do
           schedule(:execute, hd(state.todo))
         end
+
+        send self(), {:status, {:step_failed, task, reason}}
+
         {:noreply, Map.merge(state, %{executing: state.executing |> List.delete(task), failed: [{task, reason} | state.failed]})}
       end
 
       def handle_cast({:retry, task}, state) do
-        Task.start(__MODULE__, :process, [task, self()])
+        Task.start(__MODULE__, :process, [task, state.meta, self()])
+        send self(), {:status, {:step_started, task}}
         {:noreply, state}
       end
 
@@ -94,11 +121,11 @@ defmodule Extask.Worker do
         {:noreply, state}
       end
 
-      def process(task, pid) do
-        case run(task) do
-          :ok -> 
+      def process(task, meta, pid) do
+        case run(task, meta) do
+          :ok ->
             GenServer.cast(pid, {:complete, task})
-          {:ok, info} ->
+          {:ok, _info} ->
             GenServer.cast(pid, {:complete, task})
           :retry ->
             GenServer.cast(pid, {:retry, task})
@@ -112,6 +139,9 @@ defmodule Extask.Worker do
       defp schedule(method, task, millis \\ 0) do
         Process.send_after self(), {method, task}, millis
       end
+
+      defoverridable Extask.Worker
+
     end
   end
 end

@@ -5,8 +5,8 @@ defmodule Extask do
     Extask.Supervisor.start_link()
   end
 
-  def start_child(child, items) do
-    Extask.Supervisor.start_child(child, items)
+  def start_child(child, items, meta \\ []) do
+    Extask.Supervisor.start_child(child, items, meta)
   end
 
   def child_status(pid_or_id) when is_pid(pid_or_id) do
@@ -20,8 +20,8 @@ defmodule Extask do
     end
   end
 
-  def child_id(child, items) do
-    "#{child}/#{:erlang.phash2(MapSet.new(items))}"
+  def child_id(child, items, meta) do
+    "#{child}/#{:erlang.phash2(%{items: MapSet.new(items), meta: meta})}"
   end
 
 end

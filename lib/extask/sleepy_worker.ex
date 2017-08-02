@@ -3,7 +3,7 @@ defmodule Extask.SleepyWorker do
 
   require Logger
 
-  def run(task) do
+  def run(task, _meta) do
     Logger.debug("Running #{inspect task}")
     :timer.sleep(1000)
 
@@ -17,4 +17,5 @@ defmodule Extask.SleepyWorker do
       end
     end
   end
+
 end
