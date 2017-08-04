@@ -95,7 +95,7 @@ defmodule Extask.Worker do
           [] -> nil
         end
 
-        send self(), {:status, {:step_complete, task}}
+        send self(), {:status, {:task_complete, task}}
 
         {:noreply, Map.merge(state, %{executing: state.executing |> List.delete(task), done: [task | state.done]})}
       end
@@ -105,14 +105,14 @@ defmodule Extask.Worker do
           schedule(:execute, hd(state.todo))
         end
 
-        send self(), {:status, {:step_failed, task, reason}}
+        send self(), {:status, {:task_failed, task, reason}}
 
         {:noreply, Map.merge(state, %{executing: state.executing |> List.delete(task), failed: [{task, reason} | state.failed]})}
       end
 
       def handle_cast({:retry, task}, state) do
         Task.start(__MODULE__, :process, [task, state.meta, self()])
-        send self(), {:status, {:step_started, task}}
+        send self(), {:status, {:task_started, task}}
         {:noreply, state}
       end
 
