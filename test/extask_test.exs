@@ -39,6 +39,10 @@ defmodule ExtaskTest do
     assert %{done: [], executing: [], failed: [{1, "fail"}], meta: [id: 1, pid: _], todo: [], total: 1} = Extask.child_status(1) 
   end
 
+  test "return nil when asking status for inexistent child id" do
+    assert Extask.child_status(:inexistent) == nil
+  end
+
   test "error on the last item" do
     state = %{done: [3, 1], executing: [4], failed: [{2, "number is even"}], todo: [],
       total: 4}

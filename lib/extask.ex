@@ -13,15 +13,15 @@ defmodule Extask do
     Extask.Worker.status(pid_or_id)
   end
 
-  def terminate_child(pid_or_id) do
-    Extask.Supervisor.terminate_child(pid_or_id)
-  end
-
   def child_status(pid_or_id) do
     case Extask.Supervisor.find_child(pid_or_id) do
       nil -> nil
       pid -> Extask.Worker.status(pid)
     end
+  end
+
+  def terminate_child(pid_or_id) do
+    Extask.Supervisor.terminate_child(pid_or_id)
   end
 
   def child_id(child, items, meta) do
