@@ -10,7 +10,7 @@ defmodule ExtaskTest do
     end
 
     def handle_status(:job_complete, state) do
-      send Keyword.get(state.meta, :pid), :job_complete
+      if state.meta[:pid], do: send state.meta[:pid], :job_complete
       {:noreply, state}
     end
 
@@ -24,6 +24,19 @@ defmodule ExtaskTest do
     Extask.start_child(TestWorker, [1], [pid: self()])
 
     assert_receive :job_complete
+  end
+
+  test "set non-generated id" do
+    {:ok, pid} = Extask.start_child(TestWorker, [1], [id: 2])
+
+    assert pid == Extask.Supervisor.find_child(2)
+  end
+
+  test "retrieve status using id" do
+    Extask.start_child(TestWorker, [1], [id: 1, pid: self()])
+
+    assert_receive :job_complete
+    assert %{done: [], executing: [], failed: [{1, "fail"}], meta: [id: 1, pid: _], todo: [], total: 1} = Extask.child_status(1) 
   end
 
   test "error on the last item" do

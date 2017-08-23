@@ -23,10 +23,14 @@ defmodule Extask.Supervisor do
       Supervisor.child_spec(
         child,
         start: {child, :start_link, [items, meta]},
-        id: Extask.child_id(child, items, meta),
+        id: meta[:id] || Extask.child_id(child, items, meta),
         restart: :transient
       )
 
     Supervisor.start_child(@name, spec) 
+  end
+
+  def terminate_child(pid_or_id) do
+    Supervisor.terminate_child(Supervisor, pid_or_id)
   end
 end
