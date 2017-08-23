@@ -9,6 +9,10 @@ defmodule Extask do
     Extask.Supervisor.start_child(child, items, meta)
   end
 
+  def find_child(pid_or_id) do
+    Extask.Supervisor.find_child(pid_or_id)
+  end
+
   def child_status(pid_or_id) when is_pid(pid_or_id) do
     Extask.Worker.status(pid_or_id)
   end

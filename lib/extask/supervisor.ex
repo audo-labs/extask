@@ -31,6 +31,7 @@ defmodule Extask.Supervisor do
   end
 
   def terminate_child(pid_or_id) do
-    Supervisor.terminate_child(Supervisor, pid_or_id)
+    Supervisor.terminate_child(@name, pid_or_id)
+    Supervisor.delete_child(@name, pid_or_id)    
   end
 end

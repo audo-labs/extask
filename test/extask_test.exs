@@ -29,7 +29,7 @@ defmodule ExtaskTest do
   test "set non-generated id" do
     {:ok, pid} = Extask.start_child(TestWorker, [1], [id: 2])
 
-    assert pid == Extask.Supervisor.find_child(2)
+    assert pid == Extask.find_child(2)
   end
 
   test "retrieve status using id" do
@@ -41,6 +41,19 @@ defmodule ExtaskTest do
 
   test "return nil when asking status for inexistent child id" do
     assert Extask.child_status(:inexistent) == nil
+  end
+
+  test "stop child" do
+    Extask.start_child(TestWorker, [1], [id: :i_dont_deserve_to_live])
+
+    assert :ok == Extask.terminate_child(:i_dont_deserve_to_live)
+  end
+
+  test "stop and start child" do
+    Extask.start_child(TestWorker, [1], [id: :highlander])
+    assert :ok == Extask.terminate_child(:highlander)
+    {:ok, pid} = Extask.start_child(TestWorker, [:task], id: :highlander)
+    assert pid == Extask.find_child(:highlander)
   end
 
   test "error on the last item" do
