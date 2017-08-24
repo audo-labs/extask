@@ -9,11 +9,15 @@ defmodule Extask.Worker do
     GenServer.stop(pid)
   end
 
+  @callback before_run(state :: map) :: :ok | :error
+
   @callback run(task:: term, meta :: term) ::
   :ok | {:ok, data :: term} |
   :retry |
   {:retry, millis :: integer} |
   {:error, reason :: term}
+
+  @callback after_run(state:: map) :: :ok | :error
 
   @callback handle_status(status :: term, state :: term) :: {:noreply, state :: term}
 
@@ -29,7 +33,7 @@ defmodule Extask.Worker do
         GenServer.start_link(__MODULE__, [tasks: tasks, meta: meta]) 
       end
 
-      def init([tasks: tasks = [task | _], meta: meta]) do
+      def init([tasks: tasks, meta: meta]) do
         state = %{
           todo: tasks,
           failed: [],
@@ -39,9 +43,17 @@ defmodule Extask.Worker do
           meta: meta
         }
 
-        schedule(:execute, task)
+        schedule(:execute, {:call, :before_run, :run})
 
         {:ok, state}
+      end
+
+      def before_run(state) do
+        :ok
+      end
+
+      def after_run(state) do
+        :ok
       end
 
       def handle_status(m, state) do
@@ -53,12 +65,18 @@ defmodule Extask.Worker do
         {:reply, state, state}
       end
 
+      # TODO: this task tuple can conflict with tasks of overriding modules
+      def handle_cast({:execute, {:call, _, _} = task}, state) do
+        Task.start(__MODULE__, :process, [task, state, self()])
+        {:noreply, state}
+      end
+
       def handle_cast({:execute, task}, state) do
         todo = List.delete(state.todo, task)
         executing = [task | state.executing]
 
         # TODO: check task fail
-        Task.start(__MODULE__, :process, [task, state.meta, self()])
+        Task.start(__MODULE__, :process, [task, state, self()])
 
         {:noreply, Map.merge(state, %{todo: todo, executing: executing})}
       end
@@ -73,13 +91,25 @@ defmodule Extask.Worker do
         {:noreply, state}
       end
       
-      def handle_info({:status, :job_complete}, state) do
+      def handle_info(:run, state) do
+        %{todo: [task| _]} = state
+        GenServer.cast(self(), {:execute, task})
+        {:noreply, state}
+      end
+
+      def handle_info(:after, state) do
+        GenServer.cast(self(), {:execute, {:call, :after_run, :complete}})
+        {:noreply, state}
+      end
+
+      def handle_info(:complete, state) do
         handle_status(:job_complete, state)
+        {:noreply, state}
       end
 
       def handle_info({:status, msg}, state) do
         if length(state.todo ++ state.executing) == 0 do
-          send self(), {:status, :job_complete}
+          schedule(:execute, {:call, :after_run, :complete})
         end
 
         handle_status(msg, state)
@@ -92,7 +122,7 @@ defmodule Extask.Worker do
       def handle_cast({:complete, task}, state) do
         case state.todo do
           [next| _] -> schedule(:execute, next)
-          [] -> nil
+          [] -> send self(), :complete
         end
 
         send self(), {:status, {:task_complete, task}}
@@ -121,8 +151,15 @@ defmodule Extask.Worker do
         {:noreply, state}
       end
 
-      def process(task, meta, pid) do
-        case run(task, meta) do
+      def process({:call, function, next_stage}, state, pid) do
+        case apply(__MODULE__, function, [state]) do
+          :ok -> send pid, next_stage
+          :error -> nil
+        end
+      end
+
+      def process(task, state, pid) do
+        case run(task, state.meta) do
           :ok ->
             GenServer.cast(pid, {:complete, task})
           {:ok, _info} ->

@@ -56,6 +56,10 @@ defmodule ExtaskTest do
     assert pid == Extask.find_child(:highlander)
   end
 
+  test "stop non existing child" do
+    assert {:error, :not_found} == Extask.terminate_child(:gost)
+  end
+
   test "error on the last item" do
     state = %{done: [3, 1], executing: [4], failed: [{2, "number is even"}], todo: [],
       total: 4}
