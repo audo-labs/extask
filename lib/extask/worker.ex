@@ -9,7 +9,8 @@ defmodule Extask.Worker do
     GenServer.stop(pid)
   end
 
-  @callback before_run(state :: map) :: :ok | :error
+  @callback before_run(state :: map) ::
+  :ok | :error | {:error, reason :: term}
 
   @callback run(task:: term, meta :: term) ::
   :ok | {:ok, data :: term} |
@@ -17,7 +18,8 @@ defmodule Extask.Worker do
   {:retry, millis :: integer} |
   {:error, reason :: term}
 
-  @callback after_run(state:: map) :: :ok | :error
+  @callback after_run(state:: map) ::
+  :ok | :error | {:error, reason :: term}
 
   @callback handle_status(status :: term, state :: term) :: {:noreply, state :: term}
 
