@@ -156,7 +156,9 @@ defmodule Extask.Worker do
       def process({:call, function, next_stage}, state, pid) do
         case apply(__MODULE__, function, [state]) do
           :ok -> send pid, next_stage
+          {:ok, _} -> send pid, next_stage
           :error -> nil
+          {:error, _} -> nil
         end
       end
 
