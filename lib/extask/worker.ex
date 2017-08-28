@@ -143,7 +143,7 @@ defmodule Extask.Worker do
       end
 
       def handle_cast({:retry, task}, state) do
-        Task.start(__MODULE__, :process, [task, state.meta, self()])
+        Task.start(__MODULE__, :process, [task, state, self()])
         send self(), {:status, {:task_started, task}}
         {:noreply, state}
       end
