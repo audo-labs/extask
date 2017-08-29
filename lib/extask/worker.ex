@@ -28,6 +28,8 @@ defmodule Extask.Worker do
       @behaviour Extask.Worker
       use GenServer
 
+      @retry_timeout Application.get_env(:extask, Extask) |> Keyword.get(:retry_timeout) || 30000
+
       #
       # Server API
       #
@@ -42,7 +44,7 @@ defmodule Extask.Worker do
           executing: [],
           done: [],
           total: Enum.count(tasks),
-          meta: meta
+          meta: meta |> Keyword.put(:worker_pid, self())
         }
 
         schedule(:execute, {:call, :before_run, :run})
@@ -117,10 +119,6 @@ defmodule Extask.Worker do
         handle_status(msg, state)
       end
 
-      def handle_info(msg, state) do
-        super(msg, state)
-      end
-
       def handle_cast({:complete, task}, state) do
         case state.todo do
           [next| _] -> schedule(:execute, next)
@@ -154,11 +152,15 @@ defmodule Extask.Worker do
       end
 
       def process({:call, function, next_stage}, state, pid) do
-        case apply(__MODULE__, function, [state]) do
-          :ok -> send pid, next_stage
-          {:ok, _} -> send pid, next_stage
-          :error -> nil
-          {:error, _} -> nil
+        try do
+          case apply(__MODULE__, function, [state]) do
+            :ok -> send pid, next_stage
+            {:ok, _} -> send pid, next_stage
+            :error -> Process.send_after pid, {:execute, {:call, function, next_stage}}, @retry_timeout
+            {:error, _} -> Process.send_after pid, {:execute, {:call, function, next_stage}}, @retry_timeout
+          end
+        rescue
+          e -> Process.send_after pid, {:execute, {:call, function, next_stage}}, @retry_timeout
         end
       end
 

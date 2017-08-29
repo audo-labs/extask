@@ -5,6 +5,22 @@ defmodule ExtaskTest do
   defmodule TestWorker do
     use Extask.Worker
 
+    def before_run(state) do
+      case state.meta[:before_run] do
+        nil ->
+          :ok
+        :error ->
+          send state.meta[:pid], :before_run_error
+          case state.meta[:worker_pid] do
+            nil -> nil
+            _ -> send state.meta[:worker_pid], {:change_exit_status, :before_run, :ok}
+          end
+          :error
+        :ok ->
+          :ok
+      end
+    end
+
     def run(task, _meta) do
       case task do
         :error -> {:error, "fail"}
@@ -12,6 +28,26 @@ defmodule ExtaskTest do
         :raise -> raise("bad things happen")
         _ -> :ok
       end
+    end
+
+    def after_run(state) do
+      case state.meta[:after_run] do
+        nil ->
+          :ok
+        :error ->
+          send state.meta[:pid], :after_run_error
+          case state.meta[:worker_pid] do
+            nil -> nil
+            _ -> send state.meta[:worker_pid], {:change_exit_status, :after_run, :ok}
+          end
+          :error
+        :ok ->
+          :ok
+      end
+    end
+
+    def handle_info({:change_exit_status, function, status}, state) do
+      {:noreply, Map.put(state, :meta, state.meta |> Keyword.put(function, status))}
     end
 
     def handle_status(:job_complete, state) do
@@ -22,6 +58,21 @@ defmodule ExtaskTest do
     def handle_status(_a, state) do
       {:noreply, state}
     end
+
+  end
+
+  test "run after_run start until success" do
+    Extask.start_child(TestWorker, [:raise], [pid: self(), after_run: :error])
+
+    assert_receive :after_run_error
+    assert_receive :job_complete, 10000
+  end
+
+  test "run before_run start until success" do
+    Extask.start_child(TestWorker, [:raise], [pid: self(), before_run: :error])
+
+    assert_receive :before_run_error
+    assert_receive :job_complete, 10000
   end
 
   test "return error instead exception" do
@@ -46,7 +97,7 @@ defmodule ExtaskTest do
     Extask.start_child(TestWorker, [:error], [id: 1, pid: self()])
 
     assert_receive :job_complete
-    assert %{done: [], executing: [], failed: [{:error, "fail"}], meta: [id: 1, pid: _], todo: [], total: 1} = Extask.child_status(1) 
+    assert %{done: [], executing: [], failed: [{:error, "fail"}], meta: _, todo: [], total: 1} = Extask.child_status(1) 
   end
 
   test "return nil when asking status for inexistent child id" do
