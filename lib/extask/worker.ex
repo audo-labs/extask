@@ -163,17 +163,22 @@ defmodule Extask.Worker do
       end
 
       def process(task, state, pid) do
-        case run(task, state.meta) do
-          :ok ->
-            GenServer.cast(pid, {:complete, task})
-          {:ok, _info} ->
-            GenServer.cast(pid, {:complete, task})
-          :retry ->
-            GenServer.cast(pid, {:retry, task})
-          {:retry, millis} ->
-            GenServer.cast(pid, {:retry, task, millis})
-          {:error, reason} ->
-            GenServer.cast(pid, {:error, task, reason})
+        try do
+          case run(task, state.meta) do
+            :ok ->
+              GenServer.cast(pid, {:complete, task})
+            {:ok, _info} ->
+              GenServer.cast(pid, {:complete, task})
+            :retry ->
+              GenServer.cast(pid, {:retry, task})
+            {:retry, millis} ->
+              GenServer.cast(pid, {:retry, task, millis})
+            {:error, reason} ->
+              GenServer.cast(pid, {:error, task, reason})
+          end
+        rescue
+          e -> 
+            GenServer.cast(pid, {:error, task, e})
         end
       end
 

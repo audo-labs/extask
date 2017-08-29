@@ -5,8 +5,13 @@ defmodule ExtaskTest do
   defmodule TestWorker do
     use Extask.Worker
 
-    def run(_task, _meta) do
-      {:error, "fail"}
+    def run(task, _meta) do
+      case task do
+        :error -> {:error, "fail"}
+        :ok -> :ok
+        :raise -> raise("bad things happen")
+        _ -> :ok
+      end
     end
 
     def handle_status(:job_complete, state) do
@@ -17,7 +22,12 @@ defmodule ExtaskTest do
     def handle_status(_a, state) do
       {:noreply, state}
     end
+  end
 
+  test "return error instead exception" do
+    Extask.start_child(TestWorker, [:raise], [id: :misbehave, pid: self()])
+
+    assert_receive :job_complete
   end
 
   test "receive :job_complete" do
@@ -33,10 +43,10 @@ defmodule ExtaskTest do
   end
 
   test "retrieve status using id" do
-    Extask.start_child(TestWorker, [1], [id: 1, pid: self()])
+    Extask.start_child(TestWorker, [:error], [id: 1, pid: self()])
 
     assert_receive :job_complete
-    assert %{done: [], executing: [], failed: [{1, "fail"}], meta: [id: 1, pid: _], todo: [], total: 1} = Extask.child_status(1) 
+    assert %{done: [], executing: [], failed: [{:error, "fail"}], meta: [id: 1, pid: _], todo: [], total: 1} = Extask.child_status(1) 
   end
 
   test "return nil when asking status for inexistent child id" do
