@@ -10,7 +10,7 @@ defmodule ExtaskTest do
         nil ->
           :ok
         :gen_tasks ->
-          {:ok, [:todo]}
+          {:ok, {:tasks, [:todo]}}
         :error ->
           send state.meta[:pid], :before_run_error
           case state.meta[:worker_pid] do

@@ -165,10 +165,11 @@ defmodule Extask.Worker do
       def process({:call, function, next_stage}, state, pid) do
         try do
           case apply(__MODULE__, function, [state]) do
-            :ok -> send pid, next_stage
             :error -> Process.send_after pid, {:execute, {:call, function, next_stage}}, @retry_timeout
             {:error, _} -> Process.send_after pid, {:execute, {:call, function, next_stage}}, @retry_timeout
-            {:ok, tasks} -> send pid, {:update_state, tasks, {:call, function, next_stage}}
+            :ok -> send pid, next_stage
+            {:ok, {:tasks, tasks}} -> send pid, {:update_state, tasks, {:call, function, next_stage}}
+            {:ok, _} -> send pid, next_stage
           end
         rescue
           e -> Process.send_after pid, {:execute, {:call, function, next_stage}}, @retry_timeout
