@@ -9,6 +9,8 @@ defmodule ExtaskTest do
       case state.meta[:before_run] do
         nil ->
           :ok
+        :gen_tasks ->
+          {:ok, [:todo]}
         :error ->
           send state.meta[:pid], :before_run_error
           case state.meta[:worker_pid] do
@@ -59,6 +61,13 @@ defmodule ExtaskTest do
       {:noreply, state}
     end
 
+  end
+
+  test "generate task list on before_run" do
+    Extask.start_child(TestWorker, [], [id: :gen_tasks, pid: self(), before_run: :gen_tasks])
+
+    assert_receive :job_complete
+    assert %{done: [:todo], executing: [], failed: [], meta: _, todo: [], total: 1} = Extask.child_status(:gen_tasks) 
   end
 
   test "run after_run start until success" do
