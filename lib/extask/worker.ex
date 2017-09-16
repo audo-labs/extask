@@ -168,6 +168,7 @@ defmodule Extask.Worker do
             :error -> Process.send_after pid, {:execute, {:call, function, next_stage}}, @retry_timeout
             {:error, _} -> Process.send_after pid, {:execute, {:call, function, next_stage}}, @retry_timeout
             :ok -> send pid, next_stage
+            {:ok, {:tasks, []}} -> GenServer.cast(pid, {:execute, {:call, :after_run, :complete}})
             {:ok, {:tasks, tasks}} -> send pid, {:update_state, tasks, {:call, function, next_stage}}
             {:ok, _} -> send pid, next_stage
           end

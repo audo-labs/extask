@@ -9,6 +9,8 @@ defmodule ExtaskTest do
       case state.meta[:before_run] do
         nil ->
           :ok
+        :empty_tasks ->
+          {:ok, {:tasks, []}}
         :gen_tasks ->
           {:ok, {:tasks, [:todo]}}
         :error ->
@@ -68,6 +70,13 @@ defmodule ExtaskTest do
 
     assert_receive :job_complete
     assert %{done: [:todo], executing: [], failed: [], meta: _, todo: [], total: 1} = Extask.child_status(:gen_tasks) 
+  end
+
+  test "generate empty task list on before_run" do
+    Extask.start_child(TestWorker, [], [id: :empty_tasks, pid: self(), before_run: :empty_tasks])
+
+    assert_receive :job_complete
+    assert %{done: [], executing: [], failed: [], meta: _, todo: [], total: 0} = Extask.child_status(:empty_tasks)
   end
 
   test "run after_run start until success" do
