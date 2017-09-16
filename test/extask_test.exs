@@ -105,6 +105,13 @@ defmodule ExtaskTest do
     assert_receive :job_complete
   end
 
+  test "complete empty task list" do
+    {:ok, pid} = Extask.start_child(TestWorker, [], [pid: self()])
+
+    assert_receive :job_complete
+    assert %{done: [], executing: [], failed: [], meta: _, todo: [], total: 0} = Extask.child_status(pid)
+  end
+
   test "set non-generated id" do
     {:ok, pid} = Extask.start_child(TestWorker, [1], [id: 2])
 

@@ -105,6 +105,11 @@ defmodule Extask.Worker do
         GenServer.cast(self(), {:retry, task})
         {:noreply, state}
       end
+
+      def handle_info(:run, %{todo: []} = state) do
+        GenServer.cast(self(), {:execute, {:call, :after_run, :complete}})
+        {:noreply, state}
+      end
       
       def handle_info(:run, state) do
         %{todo: [task| _]} = state
