@@ -34,7 +34,7 @@ defmodule Extask.Worker do
       # Server API
       #
       def start_link(tasks, meta \\ []) do
-        GenServer.start_link(__MODULE__, [tasks: tasks, meta: meta]) 
+        GenServer.start_link(__MODULE__, [tasks: tasks, meta: meta])
       end
 
       def init([tasks: tasks, meta: meta]) do
@@ -43,6 +43,7 @@ defmodule Extask.Worker do
           failed: [],
           executing: [],
           done: [],
+          info: [],
           total: Enum.count(tasks),
           meta: meta |> Keyword.put(:worker_pid, self())
         }
@@ -110,7 +111,7 @@ defmodule Extask.Worker do
         GenServer.cast(self(), {:execute, {:call, :after_run, :complete}})
         {:noreply, state}
       end
-      
+
       def handle_info(:run, state) do
         %{todo: [task| _]} = state
         GenServer.cast(self(), {:execute, task})
@@ -144,6 +145,18 @@ defmodule Extask.Worker do
         send self(), {:status, {:task_complete, task}}
 
         {:noreply, Map.merge(state, %{executing: state.executing |> List.delete(task), done: [task | state.done]})}
+      end
+
+      def handle_cast({:complete, task, info}, state) do
+        case state.todo do
+          [next| _] -> schedule(:execute, next)
+          [] -> send self(), :complete
+        end
+
+        send self(), {:status, {:task_complete, task, info}}
+
+        {:noreply, Map.merge(state, %{executing: state.executing |> List.delete(task),
+                                      done: [task | state.done], info: [info | state.info]})}
       end
 
       def handle_cast({:error, task, reason}, state) do
@@ -187,8 +200,8 @@ defmodule Extask.Worker do
           case run(task, state.meta) do
             :ok ->
               GenServer.cast(pid, {:complete, task})
-            {:ok, _info} ->
-              GenServer.cast(pid, {:complete, task})
+            {:ok, info} ->
+              GenServer.cast(pid, {:complete, task, info})
             :retry ->
               GenServer.cast(pid, {:retry, task})
             {:retry, millis} ->
@@ -197,7 +210,7 @@ defmodule Extask.Worker do
               GenServer.cast(pid, {:error, task, reason})
           end
         rescue
-          e -> 
+          e ->
             GenServer.cast(pid, {:error, task, e})
         end
       end
