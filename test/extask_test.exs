@@ -69,7 +69,7 @@ defmodule ExtaskTest do
     Extask.start_child(TestWorker, [], [id: :gen_tasks, pid: self(), before_run: :gen_tasks])
 
     assert_receive :job_complete
-    assert %{done: [:todo], executing: [], failed: [], meta: _, todo: [], total: 1} = Extask.child_status(:gen_tasks) 
+    assert %{done: [:todo], executing: [], failed: [], meta: _, todo: [], total: 1} = Extask.child_status(:gen_tasks)
   end
 
   test "generate empty task list on before_run" do
@@ -122,7 +122,7 @@ defmodule ExtaskTest do
     Extask.start_child(TestWorker, [:error], [id: 1, pid: self()])
 
     assert_receive :job_complete
-    assert %{done: [], executing: [], failed: [{:error, "fail"}], meta: _, todo: [], total: 1} = Extask.child_status(1) 
+    assert %{done: [], executing: [], failed: [{:error, "fail"}], meta: _, todo: [], total: 1} = Extask.child_status(1)
   end
 
   test "return nil when asking status for inexistent child id" do
@@ -153,5 +153,14 @@ defmodule ExtaskTest do
       total: 4}
 
     assert TestWorker.handle_cast({:error, 4, "fail"}, state) == {:noreply, next_state}
+  end
+
+  test "retrieve info after task done" do
+    state = %{done: [], executing: [1], failed: [], todo: [], info: [],
+      total: 1}
+    next_state = %{done: [1], executing: [], failed: [], todo: [], info: [1],
+      total: 1}
+
+    assert TestWorker.handle_cast({:complete, 1, 1}, state) == {:noreply, next_state}
   end
 end
