@@ -13,6 +13,8 @@ defmodule ExtaskTest do
           {:ok, {:tasks, []}}
         :gen_tasks ->
           {:ok, {:tasks, [:todo]}}
+        :new_meta ->
+          {:ok, {:tasks, [:todo], :meta_info}}
         :error ->
           send state.meta[:pid], :before_run_error
           case state.meta[:worker_pid] do
@@ -70,6 +72,16 @@ defmodule ExtaskTest do
 
     assert_receive :job_complete
     assert %{done: [:todo], executing: [], failed: [], meta: _, todo: [], total: 1} = Extask.child_status(:gen_tasks)
+  end
+
+  test "add new information to meta on before_run" do
+    meta = [id: :new_meta, pid: self(), before_run: :new_meta]
+    Extask.start_child(TestWorker, [], meta)
+    new_meta = Keyword.put_new(meta, :info, :meta_info)
+
+    assert_receive :job_complete
+    assert %{done: [:todo], executing: [], failed: [], meta: new_meta,
+             todo: [], total: 1} = Extask.child_status(:new_meta)
   end
 
   test "generate empty task list on before_run" do
