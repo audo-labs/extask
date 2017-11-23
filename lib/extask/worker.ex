@@ -43,7 +43,6 @@ defmodule Extask.Worker do
           failed: [],
           executing: [],
           done: [],
-          info: [],
           total: Enum.count(tasks),
           meta: meta |> Keyword.put(:worker_pid, self())
         }
@@ -148,27 +147,22 @@ defmodule Extask.Worker do
         handle_status(msg, state)
       end
 
-      def handle_cast({:complete, task}, state) do
+      def handle_cast({:complete, {task, info}}, state) do
         case state.todo do
           [next| _] -> schedule(:execute, next)
           [] -> send self(), :complete
         end
 
-        send self(), {:status, {:task_complete, task}}
-
-        {:noreply, Map.merge(state, %{executing: state.executing |> List.delete(task), done: [task | state.done]})}
-      end
-
-      def handle_cast({:complete, task, info}, state) do
-        case state.todo do
-          [next| _] -> schedule(:execute, next)
-          [] -> send self(), :complete
+        case info do
+        nil ->
+          send self(), {:status, {:task_complete, task}}
+          {:noreply, Map.merge(state, %{executing: state.executing |> List.delete(task),
+                                        done: [task | state.done]})}
+        _ ->
+          send self(), {:status, {:task_complete, task}}
+          {:noreply, Map.merge(state, %{executing: state.executing |> List.delete(task),
+                                        done: [{task, info} | state.done]})}
         end
-
-        send self(), {:status, {:task_complete, task, info}}
-
-        {:noreply, Map.merge(state, %{executing: state.executing |> List.delete(task),
-                                      done: [task | state.done], info: [info | state.info]})}
       end
 
       def handle_cast({:error, task, reason}, state) do
@@ -212,9 +206,9 @@ defmodule Extask.Worker do
         try do
           case run(task, state.meta) do
             :ok ->
-              GenServer.cast(pid, {:complete, task})
+              GenServer.cast(pid, {:complete, {task, nil}})
             {:ok, info} ->
-              GenServer.cast(pid, {:complete, task, info})
+              GenServer.cast(pid, {:complete, {task, info}})
             :retry ->
               GenServer.cast(pid, {:retry, task})
             {:retry, millis} ->
