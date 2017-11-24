@@ -168,11 +168,9 @@ defmodule ExtaskTest do
   end
 
   test "retrieve info after task done" do
-    state = %{done: [], executing: [1], failed: [], todo: [], info: [],
-      total: 1}
-    next_state = %{done: [1], executing: [], failed: [], todo: [], info: [1],
-      total: 1}
+    state = %{done: [], executing: [1], failed: [], todo: [], total: 1}
+    next_state = %{done: [{1, 1}], executing: [], failed: [], todo: [], total: 1}
 
-    assert TestWorker.handle_cast({:complete, 1, 1}, state) == {:noreply, next_state}
+    assert TestWorker.handle_cast({:complete, {1, 1}}, state) == {:noreply, next_state}
   end
 end
