@@ -8,11 +8,11 @@ defmodule ExtaskTest do
     def before_run(state) do
       case state.meta[:before_run] do
         nil ->
-          :ok
+          {:ok, {:done, [], state.meta}}
         :empty_tasks ->
-          {:ok, {:tasks, []}}
+          {:ok, {:tasks, [], state.meta}}
         :gen_tasks ->
-          {:ok, {:tasks, [:todo]}}
+          {:ok, {:tasks, [:todo], state.meta}}
         :new_meta ->
           {:ok, {:tasks, [:todo], :meta_info}}
         :error ->
@@ -23,23 +23,23 @@ defmodule ExtaskTest do
           end
           :error
         :ok ->
-          :ok
+          {:ok, {:done, [], state.meta}}
       end
     end
 
     def run(task, _meta) do
       case task do
         :error -> {:error, "fail"}
-        :ok -> :ok
+        :ok -> {:ok, nil}
         :raise -> raise("bad things happen")
-        _ -> :ok
+        _ -> {:ok, nil}
       end
     end
 
     def after_run(state) do
       case state.meta[:after_run] do
         nil ->
-          :ok
+          {:ok, {:done, [], state.meta}}
         :error ->
           send state.meta[:pid], :after_run_error
           case state.meta[:worker_pid] do
@@ -48,7 +48,7 @@ defmodule ExtaskTest do
           end
           :error
         :ok ->
-          :ok
+          {:ok, {:done, [], state.meta}}
       end
     end
 
@@ -71,17 +71,7 @@ defmodule ExtaskTest do
     Extask.start_child(TestWorker, [], [id: :gen_tasks, pid: self(), before_run: :gen_tasks])
 
     assert_receive :job_complete
-    assert %{done: [:todo], executing: [], failed: [], meta: _, todo: [], total: 1} = Extask.child_status(:gen_tasks)
-  end
-
-  test "add new information to meta on before_run" do
-    meta = [id: :new_meta, pid: self(), before_run: :new_meta]
-    Extask.start_child(TestWorker, [], meta)
-    new_meta = Keyword.put_new(meta, :info, :meta_info)
-
-    assert_receive :job_complete
-    assert %{done: [:todo], executing: [], failed: [], meta: new_meta,
-             todo: [], total: 1} = Extask.child_status(:new_meta)
+    assert %{done: [{:todo, _}], executing: [], failed: [], meta: _, todo: [], total: 1} = Extask.child_status(:gen_tasks)
   end
 
   test "generate empty task list on before_run" do
