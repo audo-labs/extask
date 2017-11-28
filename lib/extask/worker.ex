@@ -28,8 +28,8 @@ defmodule Extask.Worker do
       @behaviour Extask.Worker
       use GenServer
 
-      @retry_timeout Application.get_env(:extask, Extask) |> Keyword.get(:retry_timeout) || 30000
-
+      @retry_timeout Application.get_env(:extask, Extask)
+                     |> Keyword.get(:retry_timeout) || 30000
       #
       # Server API
       #
@@ -64,8 +64,7 @@ defmodule Extask.Worker do
         {:noreply, state}
       end
 
-
-      def handle_call(:status, _from, state = %{todo: _, failed: _, executing: _, done: done, total: total}) do
+      def handle_call(:status, _from, state) do
         {:reply, state, state}
       end
 
@@ -85,14 +84,14 @@ defmodule Extask.Worker do
         {:noreply, Map.merge(state, %{todo: todo, executing: executing})}
       end
 
-      def handle_info({:update_state, update_map, retry_call}, state) do
+      def handle_info({:update_state, {tasks, meta}, retry_call}, state) do
         new_state =
           Map.merge(state, %{
-            todo: state.todo ++ update_map.todo,
-            total: length(state.todo) + length(update_map.todo),
-            meta: update_map.meta
+            todo: tasks,
+            total: length(tasks),
+            meta: meta
           })
-        [task|_] = update_map.todo
+        [task|_] = tasks
         GenServer.cast(self(), {:execute, task})
         {:noreply, new_state}
       end
@@ -144,8 +143,11 @@ defmodule Extask.Worker do
 
         send self(), {:status, {:task_complete, task}}
 
-        {:noreply, Map.merge(state, %{executing: state.executing |> List.delete(task),
-                                      done: [{task, info} | state.done]})}
+        update_map = %{
+          executing: state.executing |> List.delete(task),
+          done: [{task, info} | state.done]
+        }
+        {:noreply, Map.merge(state, update_map)}
       end
 
       def handle_cast({:error, task, reason}, state) do
@@ -154,8 +156,11 @@ defmodule Extask.Worker do
         end
 
         send self(), {:status, {:task_failed, task, reason}}
-
-        {:noreply, Map.merge(state, %{executing: state.executing |> List.delete(task), failed: [{task, reason} | state.failed]})}
+        update_map = %{
+          executing: state.executing |> List.delete(task),
+          failed: [{task, reason} | state.failed]
+        }
+        {:noreply, Map.merge(state, update_map)}
       end
 
       def handle_cast({:retry, task}, state) do
@@ -172,14 +177,20 @@ defmodule Extask.Worker do
       def process({:call, function, next_stage}, state, pid) do
         try do
           case apply(__MODULE__, function, [state]) do
-            :error -> Process.send_after pid, {:execute, {:call, function, next_stage}}, @retry_timeout
-            {:error, _} -> Process.send_after pid, {:execute, {:call, function, next_stage}}, @retry_timeout
-            {:ok, {:done, [], meta}} -> send pid, next_stage
-            {:ok, {:tasks, [], meta}} -> GenServer.cast(pid, {:execute, {:call, :after_run, :complete}})
-            {:ok, {:tasks, tasks, meta}} -> send pid, {:update_state, %{todo: tasks, meta: meta}, {:call, function, next_stage}}
+            :error ->
+              Process.send_after pid, {:execute, {:call, function, next_stage}}, @retry_timeout
+            {:error, _} ->
+              Process.send_after pid, {:execute, {:call, function, next_stage}}, @retry_timeout
+            {:ok, {:done, [], meta}} ->
+              send pid, next_stage
+            {:ok, {:tasks, [], meta}} ->
+              GenServer.cast(pid, {:execute, {:call, :after_run, :complete}})
+            {:ok, {:tasks, tasks, meta}} ->
+              send pid, {:update_state, {tasks, meta}, {:call, function, next_stage}}
           end
         rescue
-          e -> Process.send_after pid, {:execute, {:call, function, next_stage}}, @retry_timeout
+          e ->
+            Process.send_after pid, {:execute, {:call, function, next_stage}}, @retry_timeout
         end
       end
 
