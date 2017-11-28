@@ -85,25 +85,14 @@ defmodule Extask.Worker do
         {:noreply, Map.merge(state, %{todo: todo, executing: executing})}
       end
 
-      def handle_info({:update_state, [task|_] = tasks, retry_call}, state) do
+      def handle_info({:update_state, update_map, retry_call}, state) do
         new_state =
-          state
-          |> Map.merge(%{
-            todo: state.todo ++ tasks,
-            total: length(state.todo) + length(tasks)
+          Map.merge(state, %{
+            todo: state.todo ++ update_map.todo,
+            total: length(state.todo) + length(update_map.todo),
+            meta: update_map.meta
           })
-        GenServer.cast(self(), {:execute, task})
-        {:noreply, new_state}
-      end
-
-      def handle_info({:update_state, [task|_] = tasks, meta, retry_call}, state) do
-        new_state =
-          state
-          |> Map.merge(%{
-            todo: state.todo ++ tasks,
-            total: length(state.todo) + length(tasks),
-            meta: meta
-          })
+        [task|_] = update_map.todo
         GenServer.cast(self(), {:execute, task})
         {:noreply, new_state}
       end
@@ -187,7 +176,7 @@ defmodule Extask.Worker do
             {:error, _} -> Process.send_after pid, {:execute, {:call, function, next_stage}}, @retry_timeout
             {:ok, {:done, [], meta}} -> send pid, next_stage
             {:ok, {:tasks, [], meta}} -> GenServer.cast(pid, {:execute, {:call, :after_run, :complete}})
-            {:ok, {:tasks, tasks, meta}} -> send pid, {:update_state, tasks, meta, {:call, function, next_stage}}
+            {:ok, {:tasks, tasks, meta}} -> send pid, {:update_state, %{todo: tasks, meta: meta}, {:call, function, next_stage}}
           end
         rescue
           e -> Process.send_after pid, {:execute, {:call, function, next_stage}}, @retry_timeout
