@@ -16,7 +16,7 @@ defmodule ExtaskTest do
         :new_meta ->
           {:ok, {:tasks, [:todo], state.meta |> Keyword.put_new(:op, "operation")}}
         :task_info ->
-          {:ok, {:tasks, [1], state.meta}}
+          {:ok, {:tasks, [:info], state.meta}}
         :error ->
           send state.meta[:pid], :before_run_error
           case state.meta[:worker_pid] do
@@ -34,7 +34,8 @@ defmodule ExtaskTest do
         :error -> {:error, "fail"}
         :ok -> {:ok, nil}
         :raise -> raise("bad things happen")
-        _ -> {:ok, 1}
+        :info -> {:ok, 1}
+        _ -> {:ok, nil}
       end
     end
 
@@ -163,13 +164,12 @@ defmodule ExtaskTest do
     Extask.start_child(TestWorker, [], [id: :info, pid: self(), before_run: :task_info])
 
     assert_receive :job_complete
-    assert %{done: [todo: nil], executing: [], failed: [], meta: [op: "operation", worker_pid: _, id: :new_meta,
-               pid: _, before_run: :new_meta], todo: [], total: 1} = Extask.child_status(:new_meta)
+    assert %{done: [info: 1], executing: [], failed: [], meta: _, todo: [], total: 1} = Extask.child_status(:info)
   end
 
   test "update meta on before_run" do
     Extask.start_child(TestWorker, [], [id: :new_meta, pid: self(), before_run: :new_meta])
-    
+
     assert_receive :job_complete
     assert %{done: [todo: nil], executing: [], failed: [], meta: [op: "operation", worker_pid: _, id: :new_meta,
              pid: _, before_run: :new_meta], todo: [], total: 1} = Extask.child_status(:new_meta)
